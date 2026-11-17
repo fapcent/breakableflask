@@ -1,31 +1,8 @@
-FROM python:3.13.8-slim-trixie
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+FROM python:3.12-slim
 WORKDIR /app
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc \
-        libpq-dev \
-        curl && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN useradd -m appuser
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt && \
-    rm -rf /usr/local/lib/python3.13/ensurepip
-
-COPY --chown=appuser:appuser . /app
-
-USER appuser
-
-EXPOSE 4000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:4000/ || exit 1
-
-CMD ["python", "main.py"]
+RUN pip install --no-cache-dir Flask gunicorn
+COPY app.py .
+COPY templates/ templates/
+COPY static/ static/
+EXPOSE 8000
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
