@@ -12,9 +12,15 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN useradd --create-home --uid 10001 appuser
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/* \
+           /usr/local/lib/python3.12/ensurepip \
+           /usr/local/lib/python3.12/site-packages/setuptools* && \
+    useradd --create-home --uid 10001 appuser
+
 COPY --from=build /opt/venv /opt/venv
-COPY main.py .
+COPY --chown=appuser:appuser . /app
 
 USER appuser
 EXPOSE 4000
