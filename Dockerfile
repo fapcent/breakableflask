@@ -14,10 +14,10 @@ RUN apt-get update && \
 
 RUN useradd -m appuser
 
-# Mise à jour de pip/setuptools et installation des dépendances avant le code (meilleur cache)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /usr/local/lib/python3.13/ensurepip
 
 COPY --chown=appuser:appuser . /app
 
