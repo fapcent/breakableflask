@@ -1,5 +1,5 @@
 # --- Étape 1 : Compilation des dépendances ---
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # --- Étape 2 : Image finale durcie ---
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -24,7 +24,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Mise à jour des paquets système Debian et installation de libpq5
+# Mise à jour de setuptools global (élimine setuptools 70.3.0 / CVE-2025-47273)
+RUN /usr/local/bin/pip install --no-cache-dir --upgrade pip setuptools wheel
+
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends libpq5 && \
