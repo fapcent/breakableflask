@@ -24,9 +24,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+# Mise à jour des paquets système Debian et installation de libpq5
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends libpq5 && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --shell /usr/sbin/nologin --create-home appuser
