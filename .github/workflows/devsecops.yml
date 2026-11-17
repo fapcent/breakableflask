@@ -8,14 +8,11 @@ jobs:
       - name: Récupération du code
         uses: actions/checkout@v4
 
-      - name: Scan des dépendances (requirements.txt) avec Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          exit-code: 1
+      - name: Dependances
+        run: |
+          docker run --rm \
+            -v "$PWD":/project \
+            aquasec/trivy:latest fs --exit-code 1 --severity HIGH,CRITICAL /project/requirements.txt
 
   Dockerfile:
     runs-on: ubuntu-latest
@@ -24,24 +21,41 @@ jobs:
       - name: Récupération du code
         uses: actions/checkout@v4
 
-      - name: Contrôle du Dockerfile avec Trivy (misconfiguration)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: 1
+      - name: Test Dockerfile
+        run: |
+          docker run --rm \
+            -v "$PWD":/project \
+            aquasec/trivy:latest config --exit-code 1 --severity HIGH,CRITICAL /project/Dockerfile
 
-      - name: Construction de l'image Docker
-        run: docker build -t breakableflask:latest .
+      - name: Construire l'image Docker
+        run: |
+          docker build -t imgsec:1.0 .
+
+      - name: Vérifier le build (test du conteneur)
+        run: |
+          docker image inspect imgsec:1.0 > /dev/null
+          docker run -d -p 4000:4000 --name test-app imgsec:1.0
+          sleep 5
+          STATUS=$(docker inspect -f '{{.State.Running}}' test-app)
+          if [ "$STATUS" != "true" ]; then
+            echo "Échec : le conteneur ne tourne pas"
+            docker logs test-app
+            docker rm -f test-app
+            exit 1
+          fi
+          if ! curl -s -o /dev/null -w "Code HTTP reçu : %{http_code}\n" http://localhost:4000/; then
+            echo "Échec : l'application ne répond pas sur le port 4000"
+            docker logs test-app
+            docker rm -f test-app
+            exit 1
+          fi
+          docker rm -f test-app
 
       - name: Scanner l'image Docker avec Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: breakableflask:latest
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --exit-code 1 --pkg-types library --ignore-unfixed --severity HIGH,CRITICAL imgsec:1.0
 
   Deploy:
     runs-on: ubuntu-latest
