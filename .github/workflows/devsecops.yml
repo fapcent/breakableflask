@@ -1,66 +1,25 @@
-name: Automatisation des tests DevSecOps
-on: push
+FROM python:3.12-slim AS build
+WORKDIR /build
 
-jobs:
-  Dependances:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Récupération du code
-        uses: actions/checkout@v4
+RUN python -m venv /opt/venv
+COPY requirements.txt .
+RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements.txt
 
-      - name: Dependances
-        run: |
-          docker run --rm \
-            -v "$PWD":/project \
-            aquasec/trivy:latest fs --exit-code 1 --severity HIGH,CRITICAL /project/requirements.txt
+FROM python:3.12-slim
+WORKDIR /app
 
-  Dockerfile:
-    runs-on: ubuntu-latest
-    needs: Dependances
-    steps:
-      - name: Récupération du code
-        uses: actions/checkout@v4
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-      - name: Test Dockerfile
-        run: |
-          docker run --rm \
-            -v "$PWD":/project \
-            aquasec/trivy:latest config --exit-code 1 --severity HIGH,CRITICAL /project/Dockerfile
+RUN useradd --create-home --uid 10001 appuser
+COPY --from=build /opt/venv /opt/venv
+COPY main.py .
 
-      - name: Construire l'image Docker
-        run: |
-          docker build -t imgsec:1.0 .
+USER appuser
+EXPOSE 4000
 
-      - name: Vérifier le build (test du conteneur)
-        run: |
-          docker image inspect imgsec:1.0 > /dev/null
-          docker run -d -p 4000:4000 --name test-app imgsec:1.0
-          sleep 5
-          STATUS=$(docker inspect -f '{{.State.Running}}' test-app)
-          if [ "$STATUS" != "true" ]; then
-            echo "Échec : le conteneur ne tourne pas"
-            docker logs test-app
-            docker rm -f test-app
-            exit 1
-          fi
-          if ! curl -s -o /dev/null -w "Code HTTP reçu : %{http_code}\n" http://localhost:4000/; then
-            echo "Échec : l'application ne répond pas sur le port 4000"
-            docker logs test-app
-            docker rm -f test-app
-            exit 1
-          fi
-          docker rm -f test-app
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/', timeout=2).close()"]
 
-      - name: Scanner l'image Docker avec Trivy
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image --exit-code 1 --pkg-types library --ignore-unfixed --severity HIGH,CRITICAL imgsec:1.0
-
-  Deploy:
-    runs-on: ubuntu-latest
-    needs: Dockerfile
-    steps:
-      - name: Deploy
-        run: |
-          echo "Rien à faire ici. Votre application est prête à être déployée"
+CMD ["python", "main.py"]
