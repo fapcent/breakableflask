@@ -1,20 +1,31 @@
-FROM python:3.12-slim
+FROM python:3.13.8-slim-trixie
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" wheel
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc \
+        libpq-dev \
+        curl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m appuser
+
+# Mise à jour de pip/setuptools et installation des dépendances avant le code (meilleur cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --chown=appuser:appuser . /app
 
-RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=5s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:4000/ || exit 1
 
 CMD ["python", "main.py"]
