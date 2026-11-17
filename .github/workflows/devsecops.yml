@@ -1,25 +1,44 @@
-FROM python:3.12-slim AS build
-WORKDIR /build
+name: Automatisation des tests DevSecOps
+on: push
 
-RUN python -m venv /opt/venv
-COPY requirements.txt .
-RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+permissions:
+contents: read
 
-FROM python:3.12-slim
-WORKDIR /app
+jobs:
+Dependances:
+runs-on: ubuntu-latest
+steps:
+- uses: actions/checkout@v6.0.2
 
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+  - name: Scanner requirements.txt avec Trivy
+    uses: aquasecurity/trivy-action@v0.36.0
+    env:
+      TRIVY_DETECTION_PRIORITY: comprehensive
+    with:
+      scan-type: fs
+      scan-ref: requirements.txt
+      scanners: vuln
+      severity: HIGH,CRITICAL
+      exit-code: '1'
+Dockerfile:
+needs: Dependances
+runs-on: ubuntu-latest
+steps:
+- uses: actions/checkout@v6.0.2
 
-RUN useradd --create-home --uid 10001 appuser
-COPY --from=build /opt/venv /opt/venv
-COPY main.py .
+  - name: Construire l'image Docker
+    run: docker build -t breakableflask:ci .
 
-USER appuser
-EXPOSE 4000
-
-HEALTHCHECK --interval=30s --timeout=3s \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/', timeout=2).close()"]
-
-CMD ["python", "main.py"]
+  - name: Scanner le Dockerfile avec Trivy
+    uses: aquasecurity/trivy-action@v0.36.0
+    with:
+      scan-type: config
+      scan-ref: Dockerfile
+      severity: HIGH,CRITICAL
+      exit-code: '1'
+Deploy:
+needs: Dockerfile
+runs-on: ubuntu-latest
+steps:
+- name: Deploy
+run: echo "Votre application est prête à être déployée"
