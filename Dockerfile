@@ -12,9 +12,9 @@ COPY . .
 RUN useradd --create-home appuser
 USER appuser
 
-EXPOSE 5000
+EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=5s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000')" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:4000')" || exit 1
 
 CMD ["python", "main.py"]
